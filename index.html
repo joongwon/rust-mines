@@ -1,0 +1,223 @@
+<!DOCTYPE HTML>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>지뢰찾기</title>
+  <style>
+      body {
+          font-family: sans-serif;
+      }
+
+      h1 {
+          text-align: center;
+      }
+
+      table {
+          border-collapse: collapse;
+          margin: 0 auto;
+      }
+
+      td {
+          border: 1px solid black;
+          width: 2em;
+          height: 2em;
+          text-align: center;
+      }
+
+      td.tile-9, td.tile-11 {
+          background-color: darkgrey;
+      }
+      td.tile-10 {
+          background-color: red;
+      }
+      td.tile-1 {
+          color: blue;
+      }
+      td.tile-2 {
+          color: green;
+      }
+      td.tile-3 {
+          color: red;
+      }
+      td.tile-4 {
+          color: purple;
+      }
+      td.tile-5 {
+          color: maroon;
+      }
+      td.tile-6 {
+          color: teal;
+      }
+      td.tile-7 {
+          color: black;
+      }
+      td.tile-8 {
+          color: gray;
+      }
+
+      td.tile-9:hover, td.tile-11:hover {
+          background-color: gray;
+      }
+      td:hover {
+          background-color: lightgray;
+      }
+
+  </style>
+</head>
+<body>
+<h1>지뢰찾기</h1>
+<form id="form">
+  <fieldset disabled id="fieldset">
+    <label for="seed">시드</label>
+    <input type="text" id="seed" value="0">
+    <label for="width">너비</label>
+    <input type="number" id="width" value="10">
+    <label for="height">높이</label>
+    <input type="number" id="height" value="10">
+    <label for="mines">지뢰</label>
+    <input type="number" id="mines" value="10">
+    <button type="submit">생성</button>
+  </fieldset>
+</form>
+<table>
+  <tbody id="output">
+  </tbody>
+</table>
+<script type="module">
+    import init, {MinesView, PrimitiveViewTile, GameStatus} from "./pkg/mines.js";
+
+    const module = init();
+
+    // @type {MinesView | null}
+    let game = null;
+
+    let rightButtonDown = false;
+    let leftButtonDown = false;
+    window.addEventListener("mousedown", (event) => {
+        if (event.button === 0) {
+            leftButtonDown = true;
+        } else if (event.button === 2) {
+            rightButtonDown = true;
+        }
+    });
+
+    window.addEventListener("mouseup", (event) => {
+        if (event.button === 0) {
+            leftButtonDown = false;
+        } else if (event.button === 2) {
+            rightButtonDown = false;
+        }
+    });
+
+    module.then(() => {
+        const form = document.getElementById("form");
+        const output = document.getElementById("output");
+        const seed = document.getElementById("seed");
+        const width = document.getElementById("width");
+        const height = document.getElementById("height");
+        const mines = document.getElementById("mines");
+        const fieldset = document.getElementById("fieldset");
+
+        output.addEventListener("click", function callback(event) {
+            if (game.status !== GameStatus.Playing) {
+                return;
+            }
+            if (event.target.tagName !== "TD") {
+                return;
+            }
+            const x = event.target.dataset.x;
+            const y = event.target.dataset.y;
+            const W = game.width();
+            const H = game.height();
+
+            if (rightButtonDown) {
+                game.reveal_around(x, y);
+            } else {
+                game.reveal(x, y);
+            }
+
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    const cell = output.children[y].children[x];
+                    const tile = game.get(x, y);
+                    if (cell.className === "tile-" + tile) {
+                        continue;
+                    }
+                    cell.className = "tile-" + tile;
+                    switch (tile) {
+                        case PrimitiveViewTile.Hidden:
+                            cell.textContent = "";
+                            break;
+                        case PrimitiveViewTile.Exploded:
+                            cell.textContent = "💥";
+                            break;
+                        case PrimitiveViewTile.R0:
+                            cell.textContent = "";
+                            break;
+                        case PrimitiveViewTile.Flagged:
+                            cell.textContent = "🚩";
+                            break;
+                        default:
+                            cell.textContent = tile.toString();
+                    }
+                }
+            }
+
+            if (game.status === GameStatus.Won) {
+                alert("승리!");
+            } else if (game.status === GameStatus.Lost) {
+                alert("패배!");
+            }
+        });
+
+        output.addEventListener("contextmenu", (event) => {
+            if (game.status !== GameStatus.Playing) {
+                return;
+            }
+            event.preventDefault();
+            if (event.target.tagName !== "TD") {
+                return;
+            }
+            const x = event.target.dataset.x;
+            const y = event.target.dataset.y;
+            if (leftButtonDown) {
+                game.reveal_around(x, y);
+            } else {
+                game.flag(x, y);
+            }
+
+            const tile = game.get(x, y);
+            event.target.className = "tile-" + tile;
+            if (tile === PrimitiveViewTile.Hidden) {
+                event.target.textContent = "";
+            } else if (tile === PrimitiveViewTile.Flagged) {
+                event.target.textContent = "🚩";
+            }
+        });
+
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            if (game) {
+                game.free();
+            }
+            game = MinesView.generate(seed.value, width.value, height.value, mines.value);
+            output.innerHTML = "";
+            const W = game.width();
+            const H = game.height();
+            for (let y = 0; y < H; y++) {
+                const row = document.createElement("tr");
+                for (let x = 0; x < W; x++) {
+                    const cell = document.createElement("td");
+                    cell.dataset.x = x.toString();
+                    cell.dataset.y = y.toString();
+                    cell.className = "tile-" + PrimitiveViewTile.Hidden;
+                    row.appendChild(cell);
+                }
+                output.appendChild(row);
+            }
+        });
+        fieldset.disabled = false;
+    });
+</script>
+</body>
+</html>
